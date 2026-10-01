@@ -67,13 +67,12 @@
         /* --- CANVAS 3D CUBE --- */
         #cubeCanvas { width: 100%; height: 150px; margin-top: 20px; }
 
-        /* --- BINGKAI KAMERA TENGAH (DIMAKSIMALKAN WIDESCREEN) --- */
+        /* --- BINGKAI KAMERA TENGAH (FLEXIBEL & PROPORSIONAL) --- */
         .camera-wrapper {
             position: relative; 
             flex: 1; /* Mengisi seluruh sisa layar di tengah */
-            margin: 0 30px; 
+            margin: 0 20px; 
             height: 92vh; /* Mengambil tinggi maksimum */
-            aspect-ratio: 16 / 9; /* Memaksa rasio WIDESCREEN agar proporsional */
             border: 2px solid rgba(0, 255, 0, 0.6);
             box-shadow: 0 0 40px rgba(0, 255, 0, 0.3), inset 0 0 30px rgba(0, 255, 0, 0.2);
             background: #000; z-index: 10; overflow: hidden;
@@ -109,8 +108,8 @@
         /* Video Asli */
         #videoElement {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            /* object-fit: fill menyamakan gambar dengan frame secara sempurna tanpa crop! */
-            object-fit: fill; 
+            /* object-fit: cover membuat video proporsional (tidak lonjong), memotong otomatis jika frame berbeda bentuk */
+            object-fit: cover; 
             transform: scaleX(-1); /* Membalik kamera (Mirror) */
             filter: grayscale(30%) sepia(20%) hue-rotate(90deg) brightness(1.2) contrast(130%) saturate(120%);
         }
