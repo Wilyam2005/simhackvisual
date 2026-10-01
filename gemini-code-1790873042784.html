@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Biometric Surveillance</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #020202; color: #0f0;
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            overflow: hidden; user-select: none;
+        }
+
+        /* --- FASE 1: BOOTING SCREEN --- */
+        #boot-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end;
+            z-index: 100; background: #000;
+        }
+        #console-output { text-shadow: 0 0 5px #0f0; line-height: 1.4; font-size: 15px; white-space: pre-wrap; word-wrap: break-word; }
+
+        /* --- FASE 2: LAYAR UTAMA --- */
+        #surveillance-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5; background: transparent;
+            display: none; justify-content: space-between; align-items: center; padding: 20px; box-sizing: border-box;
+        }
+
+        /* BACKGROUND MATRIX RAIN */
+        #matrixCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.35; }
+
+        /* PANEL KIRI & KANAN (RAMAI & SIBUK) */
+        .side-panel {
+            position: relative; z-index: 20; width: 220px; height: 90vh;
+            display: flex; flex-direction: column; justify-content: space-between;
+            background: rgba(0, 20, 0, 0.4); border: 1px solid rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 20px rgba(0,255,0,0.1); padding: 15px; box-sizing: border-box;
+        }
+
+        .data-stream {
+            font-size: 10px; line-height: 1.2; overflow: hidden; height: 150px;
+            color: rgba(0, 255, 0, 0.7); text-shadow: 0 0 2px #0f0;
+        }
+
+        /* --- ANIMASI 3D CSS (GYROSCOPE RINGS) --- */
+        .gyro-container {
+            position: relative; width: 100px; height: 100px; margin: 20px auto;
+            perspective: 800px; transform-style: preserve-3d;
+        }
+        .gyro-ring {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border: 2px solid rgba(0, 255, 0, 0.8); border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5), inset 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        .r1 { animation: spinX 3s linear infinite; }
+        .r2 { animation: spinY 4s linear infinite; border-color: rgba(255, 0, 0, 0.6); width: 80%; height: 80%; top: 10%; left: 10%; }
+        .r3 { animation: spinZ 5s linear infinite; border: 2px dashed rgba(255, 255, 0, 0.8); width: 60%; height: 60%; top: 20%; left: 20%; }
+        
+        @keyframes spinX { 100% { transform: rotateX(360deg) rotateY(180deg); } }
+        @keyframes spinY { 100% { transform: rotateY(360deg) rotateZ(180deg); } }
+        @keyframes spinZ { 100% { transform: rotateZ(360deg) rotateX(180deg); } }
+
+        /* --- CANVAS 3D CUBE --- */
+        #cubeCanvas { width: 100%; height: 150px; margin-top: 20px; }
+
+        /* --- BINGKAI KAMERA TENGAH --- */
+        .camera-wrapper {
+            position: relative; flex-grow: 1; max-width: 800px; height: 75vh;
+            margin: 0 30px; border: 2px solid rgba(0, 255, 0, 0.6);
+            box-shadow: 0 0 40px rgba(0, 255, 0, 0.3), inset 0 0 30px rgba(0, 255, 0, 0.2);
+            background: #000; z-index: 10; display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+
+        /* Sudut Frame Kamera */
+        .frame-corner { position: absolute; width: 50px; height: 50px; border: 4px solid #0f0; z-index: 20; }
+        .fc-tl { top: -2px; left: -2px; border-bottom: none; border-right: none; }
+        .fc-tr { top: -2px; right: -2px; border-bottom: none; border-left: none; }
+        .fc-bl { bottom: -2px; left: -2px; border-top: none; border-right: none; }
+        .fc-br { bottom: -2px; right: -2px; border-top: none; border-left: none; }
+
+        /* Video Asli dengan Night Vision TIPIS (Subtle) */
+        #videoElement {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+            /* Efek tipis: Turunkan warna (grayscale 40%), beri efek hijau (sepia+hue-rotate), tajamkan kontras */
+            filter: grayscale(40%) sepia(30%) hue-rotate(80deg) brightness(1.2) contrast(120%) saturate(110%);
+        }
+
+        /* Canvas untuk Node Tracking Wajah */
+        #trackingCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 15; }
+
+        /* Teks Status di Dalam Frame */
+        .hud-overlay { position: absolute; z-index: 20; font-size: 14px; text-shadow: 0 0 8px #000; }
+        .red-text { color: #f00; text-shadow: 0 0 8px #f00; font-weight: bold; }
+        .yellow-text { color: #ff0; text-shadow: 0 0 8px #ff0; }
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        /* Garis Scanlines Halus */
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px; z-index: 90; pointer-events: none;
+        }
+        
+        .edu-note { position: fixed; bottom: 5px; width: 100%; text-align: center; color: rgba(255,255,255,0.4); font-size: 11px; z-index: 200; font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+
+    <!-- BACKGROUND MATRIX HACKER -->
+    <canvas id="matrixCanvas"></canvas>
+
+    <!-- FASE 1: BOOTING TERMINAL -->
+    <div id="boot-screen">
+        <div id="console-output"></div>
+    </div>
+
+    <!-- FASE 2: LAYAR UTAMA (RAMAI & 3D) -->
+    <div id="surveillance-screen">
+        
+        <!-- PANEL KIRI -->
+        <div class="side-panel">
+            <div>
+                <span class="red-text blink">● LIVE UPLINK</span><br>
+                <span>SYS_NODE_01</span>
+                <hr style="border-color: #0f0; opacity: 0.3;">
+            </div>
+            
+            <!-- 3D Gyroscope -->
+            <div class="gyro-container">
+                <div class="gyro-ring r1"></div>
+                <div class="gyro-ring r2"></div>
+                <div class="gyro-ring r3"></div>
+                <div style="position:absolute; top:40%; left:25%; font-size:10px; color:#fff;">TRACK</div>
+            </div>
+
+            <div>
+                <span style="font-size:12px;">DECRYPT_LOGS:</span>
+                <div class="data-stream" id="left-log"></div>
+            </div>
+        </div>
+
+        <!-- BINGKAI KAMERA TENGAH (NIGHT VISION & MOTION TRACKING) -->
+        <div class="camera-wrapper">
+            <div class="frame-corner fc-tl"></div>
+            <div class="frame-corner fc-tr"></div>
+            <div class="frame-corner fc-bl"></div>
+            <div class="frame-corner fc-br"></div>
+            
+            <video id="videoElement" autoplay muted playsinline></video>
+            <canvas id="trackingCanvas"></canvas>
+
+            <div class="hud-overlay" style="top: 15px; left: 15px; font-size: 18px;">
+                <span class="red-text blink">● REC</span> <span style="font-size:12px; color:#fff;">NV_MODE: SUBTLE</span>
+            </div>
+            <div class="hud-overlay" style="top: 15px; right: 15px; text-align: right;">
+                AI_TRACKING: <span class="yellow-text">ACTIVE</span><br>
+                <span id="target-coords">POS: 0.00</span>
+            </div>
+            <div class="hud-overlay" style="bottom: 15px; left: 15px;">
+                > BIOMETRIC MATCH: 99.8%<br>
+                > DEVICE_IP: <span id="rand-ip"></span>
+            </div>
+            <div class="hud-overlay red-text" style="bottom: 15px; right: 15px; font-size: 22px;">
+                UPLOADING <span id="upload-pct">0%</span>
+            </div>
+        </div>
+
+        <!-- PANEL KANAN -->
+        <div class="side-panel">
+            <div style="text-align: right;">
+                <span class="yellow-text">SECURE_CHANNEL</span><br>
+                <span>DAT_PACKETS: <span id="data-pkt">0</span></span>
+                <hr style="border-color: #0f0; opacity: 0.3;">
+            </div>
+            
+            <!-- Canvas 3D Wireframe Cube -->
+            <div>
+                <span style="font-size:10px;">TOPOLOGY_RENDER:</span>
+                <canvas id="cubeCanvas" width="180" height="150"></canvas>
+            </div>
+
+            <div style="text-align: right;">
+                <span style="font-size:12px;">HEX_DUMP:</span>
+                <div class="data-stream" id="right-log" style="text-align:right;"></div>
+            </div>
+        </div>
+
+    </div>
+    
+    <div class="edu-note">[ SIMULASI EDUKASI ] Kamera hanya tampil secara lokal. Tidak ada data yang dicuri. Jangan asal berikan izin kamera di internet!</div>
+
+    <!-- Canvas Tersembunyi Untuk Pendeteksi Gerak (Motion Tracker) -->
+    <canvas id="motionCanvas" width="64" height="48" style="display:none;"></canvas>
+
+    <script>
+        const consoleOutput = document.getElementById('console-output');
+        const bootScreen = document.getElementById('boot-screen');
+        const surveillanceScreen = document.getElementById('surveillance-screen');
+        const videoElement = document.getElementById('videoElement');
+
+        function rHex() { return Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0').toUpperCase(); }
+
+        // --- 1. BOOTING SEQUENCE ---
+        async function runBootSequence() {
+            let bootText = "";
+            const lines = ["INITIATING SYSTEM OVERRIDE...", "BYPASSING FIREWALL... [OK]", "DEPLOYING NEURAL NETWORK MESH...", "ACTIVATING NIGHT VISION PROTOCOL (SUBTLE)..."];
+            
+            for(let text of lines) {
+                bootText += `> ${text}\n`;
+                consoleOutput.innerText = bootText;
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            let dumpCount = 0;
+            const dumpInterval = setInterval(() => {
+                bootText += `0x${rHex()} ${rHex()} ${rHex()} ${rHex()} SYS_CORE\n`;
+                let linesArr = bootText.split('\n');
+                if (linesArr.length > 20) linesArr = linesArr.slice(linesArr.length - 20);
+                consoleOutput.innerText = linesArr.join('\n');
+                dumpCount++;
+
+                if(dumpCount > 20) {
+                    clearInterval(dumpInterval);
+                    bootText += "\n> TARGET SIGHTED.\n<span style='color:red; font-size:18px;'>[!] REQUESTING CAMERA FEED... (AWAITING PERMISSION)</span>\n";
+                    consoleOutput.innerHTML = bootText;
+                    setTimeout(requestCamera, 500);
+                }
+            }, 30);
+        }
+
+        // --- 2. AKSES KAMERA ---
+        function requestCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                .then(function (stream) {
+                    bootScreen.style.display = "none";
+                    surveillanceScreen.style.display = "flex";
+                    videoElement.srcObject = stream;
+                    
+                    initMatrixRain();
+                    init3DCube();
+                    startSideLogs();
+                    startDynamicData();
+                    
+                    videoElement.onloadedmetadata = () => { initMotionTracker(); };
+                })
+                .catch(function (err) {
+                    consoleOutput.innerHTML += "\n<span style='color:gray;'>[-] ERROR: CAMERA ACCESS DENIED.</span>\n";
+                });
+        }
+
+        // --- 3. ALGORITMA MOTION TRACKING (MENGIKUTI WAJAH) ---
+        function initMotionTracker() {
+            const canvas = document.getElementById('trackingCanvas');
+            const ctx = canvas.getContext('2d');
+            const motionCanvas = document.getElementById('motionCanvas');
+            const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+            
+            function resizeCanvas() {
+                canvas.width = videoElement.clientWidth;
+                canvas.height = videoElement.clientHeight;
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            let prevFrameData = null;
+            let targetX = canvas.width / 2, targetY = canvas.height / 2;
+            let currentX = canvas.width / 2, currentY = canvas.height / 2;
+            let nodes = [];
+            
+            for(let i = 0; i < 40; i++) {
+                nodes.push({
+                    offsetX: (Math.random() - 0.5) * 180,
+                    offsetY: (Math.random() - 0.5) * 220,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2
+                });
+            }
+
+            function processTracking() {
+                motionCtx.drawImage(videoElement, 0, 0, 64, 48);
+                let currentFrameData = motionCtx.getImageData(0, 0, 64, 48).data;
+
+                if (prevFrameData) {
+                    let motionX = 0, motionY = 0, motionCount = 0;
+                    for (let i = 0; i < currentFrameData.length; i += 4) {
+                        let diff = Math.abs(currentFrameData[i] - prevFrameData[i]) + Math.abs(currentFrameData[i+1] - prevFrameData[i+1]) + Math.abs(currentFrameData[i+2] - prevFrameData[i+2]);
+                        if (diff > 120) {
+                            let px = (i / 4) % 64, py = Math.floor((i / 4) / 64);
+                            motionX += px; motionY += py; motionCount++;
+                        }
+                    }
+                    if (motionCount > 10) {
+                        let rawTargetX = (motionX / motionCount) / 64 * canvas.width;
+                        let rawTargetY = (motionY / motionCount) / 48 * canvas.height;
+                        targetX = canvas.width - rawTargetX; // Mirror adjustment
+                        targetY = rawTargetY;
+                    }
+                }
+                prevFrameData = currentFrameData;
+
+                currentX += (targetX - currentX) * 0.15; // Smooth follow
+                currentY += (targetY - currentY) * 0.15;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('target-coords').innerText = `X:${currentX.toFixed(0)} Y:${currentY.toFixed(0)}`;
+
+                ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
+                ctx.lineWidth = 1;
+
+                // Gambar Node Topologi
+                for(let i = 0; i < nodes.length; i++) {
+                    let node = nodes[i];
+                    node.offsetX += node.vx; node.offsetY += node.vy;
+                    if(Math.abs(node.offsetX) > 100) node.vx *= -1;
+                    if(Math.abs(node.offsetY) > 130) node.vy *= -1;
+
+                    let ax = currentX + node.offsetX, ay = currentY + node.offsetY;
+                    ctx.beginPath(); ctx.arc(ax, ay, 2, 0, Math.PI * 2); ctx.fill();
+
+                    for(let j = i + 1; j < nodes.length; j++) {
+                        let ax2 = currentX + nodes[j].offsetX, ay2 = currentY + nodes[j].offsetY;
+                        if(Math.hypot(ax - ax2, ay - ay2) < 45) {
+                            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax2, ay2); ctx.stroke();
+                        }
+                    }
+                }
+
+                // Gambar Bounding Box Target
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 1.5;
+                ctx.strokeRect(currentX - 120, currentY - 150, 240, 300);
+                
+                // Crosshair Center
+                ctx.beginPath();
+                ctx.moveTo(currentX - 15, currentY); ctx.lineTo(currentX + 15, currentY);
+                ctx.moveTo(currentX, currentY - 15); ctx.lineTo(currentX, currentY + 15);
+                ctx.stroke();
+
+                requestAnimationFrame(processTracking);
+            }
+            processTracking();
+        }
+
+        // --- 4. DATA LOGS SIBUK DI PANEL KIRI KANAN ---
+        function startSideLogs() {
+            const leftLog = document.getElementById('left-log');
+            const rightLog = document.getElementById('right-log');
+            setInterval(() => {
+                let lStr = "", rStr = "";
+                for(let i=0; i<15; i++) {
+                    lStr += `> PORT_${Math.floor(Math.random()*99)} OPEN [OK]<br>`;
+                    rStr += `0x${rHex()} ${Math.random()>0.5?'NULL':'DATA'}<br>`;
+                }
+                leftLog.innerHTML = lStr; rightLog.innerHTML = rStr;
+            }, 200);
+        }
+
+        function startDynamicData() {
+            document.getElementById('rand-ip').innerText = `192.168.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+            let uploadVal = 0;
+            setInterval(() => { document.getElementById('data-pkt').innerText = Math.floor(Math.random() * 90000) + 10000; }, 100);
+            setInterval(() => {
+                uploadVal += (Math.random() * 1.5);
+                if (uploadVal > 99.9) uploadVal = 0;
+                document.getElementById('upload-pct').innerText = uploadVal.toFixed(1) + "%";
+            }, 200);
+        }
+
+        // --- 5. BACKGROUND MATRIX RAIN ---
+        function initMatrixRain() {
+            const canvas = document.getElementById('matrixCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*".split("");
+            const fontSize = 14;
+            const columns = canvas.width / fontSize;
+            const drops = Array(Math.floor(columns)).fill(1);
+
+            function drawMatrix() {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#0F0";
+                ctx.font = fontSize + "px monospace";
+
+                for (let i = 0; i < drops.length; i++) {
+                    let text = chars[Math.floor(Math.random() * chars.length)];
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                }
+                requestAnimationFrame(drawMatrix);
+            }
+            drawMatrix();
+        }
+
+        // --- 6. RENDER 3D KUBUS (CANVAS) ---
+        function init3DCube() {
+            const canvas = document.getElementById('cubeCanvas');
+            const ctx = canvas.getContext('2d');
+            let angle = 0;
+            
+            // Titik kordinat kubus 3D
+            const points = [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+            const edges = [[0,1],[1,2],[2,3],[3,0], [4,5],[5,6],[6,7],[7,4], [0,4],[1,5],[2,6],[3,7]];
+
+            function drawCube() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#0f0'; ctx.lineWidth = 1.5;
+                
+                let projected = [];
+                let scale = 40;
+                let cx = canvas.width / 2, cy = canvas.height / 2;
+
+                // Rotasi 3D matematika sederhana
+                for (let p of points) {
+                    let x = p[0], y = p[1], z = p[2];
+                    // Rotasi sumbu Y dan X
+                    let x1 = x * Math.cos(angle) - z * Math.sin(angle);
+                    let z1 = x * Math.sin(angle) + z * Math.cos(angle);
+                    let y2 = y * Math.cos(angle) - z1 * Math.sin(angle);
+                    let z2 = y * Math.sin(angle) + z1 * Math.cos(angle);
+                    
+                    // Proyeksi ke 2D
+                    let d = 3; 
+                    let w = scale / (d - z2);
+                    projected.push([x1 * w * scale + cx, y2 * w * scale + cy]);
+                }
+
+                // Gambar garis antar titik
+                for (let e of edges) {
+                    ctx.beginPath();
+                    ctx.moveTo(projected[e[0]][0], projected[e[0]][1]);
+                    ctx.lineTo(projected[e[1]][0], projected[e[1]][1]);
+                    ctx.stroke();
+                }
+                
+                angle += 0.02;
+                requestAnimationFrame(drawCube);
+            }
+            drawCube();
+        }
+
+        window.onload = runBootSequence;
+    </script>
+</body>
+</html>
